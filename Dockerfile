@@ -1,5 +1,5 @@
 # Use a lightweight base image that supports Raspberry Pi 5 (ARM64)
-FROM arm64v8/debian:bullseye
+FROM arm64v8/debian:latest
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
