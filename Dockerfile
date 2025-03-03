@@ -3,7 +3,8 @@ FROM debian:bullseye
 
 # Install necessary packages
 RUN apt-get update && apt-get install -y \
-    apt-utils hostapd dnsmasq iproute2 iptables iw \
+    apt-utils hostapd dnsmasq iproute2 iptables iw net-tools \
+    tcpdump procps iputils-ping curl wget nano busybox \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy configuration files (to be created separately)
