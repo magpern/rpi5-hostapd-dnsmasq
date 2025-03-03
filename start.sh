@@ -44,8 +44,8 @@ echo "🚀 Starting hostapd..."
 hostapd -B /etc/hostapd/hostapd.conf
 sleep 2
 
-# ✅ Verify hostapd is running
-if ! pgrep -x "hostapd" > /dev/null; then
+# ✅ Verify hostapd is running without using pgrep
+if ! pidof hostapd > /dev/null; then
     echo "❌ Failed to start hostapd! Exiting..."
     exit 1
 fi
@@ -55,8 +55,8 @@ echo "🚀 Starting dnsmasq..."
 dnsmasq -C /etc/dnsmasq.conf -d &
 sleep 2
 
-# ✅ Verify dnsmasq is running
-if ! pgrep -x "dnsmasq" > /dev/null; then
+# ✅ Verify hostapd is running without using pgrep
+if ! pidof dnsmasq > /dev/null; then
     echo "❌ Failed to start dnsmasq! Exiting..."
     exit 1
 fi
