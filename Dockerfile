@@ -1,19 +1,18 @@
-# Use a lightweight Debian-based image
+# Use a lightweight base image that supports Raspberry Pi 5 (ARM64)
 FROM debian:bullseye
 
-# Install required packages
+# Install necessary packages
 RUN apt-get update && apt-get install -y \
-    apt-utils create-ap iproute2 iptables iw net-tools \
+    apt-utils hostapd dnsmasq iproute2 iptables iw net-tools \
     tcpdump procps iputils-ping curl wget nano busybox \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy configuration files (so they exist inside the image)
-COPY wifi-ap.conf /etc/wifi-ap.conf
-COPY create_ap.conf /etc/create_ap.conf
+# Copy configuration files (to be created separately)
+COPY hostapd.conf /etc/hostapd/hostapd.conf
+COPY dnsmasq.conf /etc/dnsmasq.conf
 COPY start.sh /start.sh
-
-# Ensure scripts and config are executable
 RUN chmod +x /start.sh
 
-# Entrypoint script
+# Set the startup script as the container entrypoint
 CMD ["/bin/bash", "/start.sh"]
+

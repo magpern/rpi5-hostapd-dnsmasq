@@ -1,31 +1,25 @@
 #!/bin/bash
 
-echo "🚀 Starting WiFi AP inside Docker container using create_ap..."
+echo "🚀 Starting WiFi AP inside Docker container..."
 
-# ✅ Load Configuration from External File
-CONFIG_FILE="/etc/wifi-ap.conf"
-if [[ -f "$CONFIG_FILE" ]]; then
-    source "$CONFIG_FILE"
+# ✅ Extract the Gateway IP from dnsmasq.conf
+GATEWAY_IP=$(grep -oP 'dhcp-option=3,\K[\d.]+' /etc/dnsmasq.conf)
+
+# ✅ If no IP is found, set a default value
+if [[ -z "$GATEWAY_IP" ]]; then
+    GATEWAY_IP="192.168.4.1"
+    echo "⚠️ No gateway IP found in dnsmasq.conf. Using default: $GATEWAY_IP"
 else
-    echo "❌ Missing config file: $CONFIG_FILE"
-    exit 1
+    echo "✅ Gateway IP detected from dnsmasq.conf: $GATEWAY_IP"
 fi
-
-# ✅ Ensure Variables Exist (Fallback Defaults)
-WIFI_IFACE="${WIFI_IFACE:-wlan0}"
-INTERNET_IFACE="${INTERNET_IFACE:-none}"
-SSID="${SSID:-ESP32Network}"
-PASSWORD="${PASSWORD:-MySecretPassword}"
-GATEWAY_IP="${GATEWAY_IP:-192.168.4.1}"
-DHCP_CONFIG="/etc/create_ap.conf"
 
 # ✅ Cleanup function (runs on exit)
 cleanup() {
-    echo "🛑 Stopping create_ap..."
-    pkill -f create_ap
+    echo "🛑 Cleaning up wlan0 before container stops..."
+    killall hostapd dnsmasq 2>/dev/null
     sleep 2
-    ip link set "$WIFI_IFACE" down
-    ip addr flush dev "$WIFI_IFACE"
+    ip link set wlan0 down
+    ip addr flush dev wlan0
     echo "✅ wlan0 cleaned up. Exiting."
     exit 0
 }
@@ -34,27 +28,42 @@ cleanup() {
 trap cleanup SIGTERM
 
 # ✅ Ensure wlan0 is DOWN first (prevents conflicts)
-echo "🔄 Resetting $WIFI_IFACE..."
-ip link set "$WIFI_IFACE" down
+echo "🔄 Resetting wlan0..."
+ip link set wlan0 down
 sleep 2
 
-# ✅ Bring wlan0 UP
-echo "✅ Enabling $WIFI_IFACE..."
-ip link set "$WIFI_IFACE" up
+# ✅ Set up wlan0 with the dynamic IP
+echo "✅ Enabling wlan0..."
+ip link set wlan0 up
 sleep 2
-ip addr flush dev "$WIFI_IFACE"
+ip addr flush dev wlan0  # Ensure no stale IPs
+ip addr add "$GATEWAY_IP/24" dev wlan0
 
-# ✅ Start `create_ap` with config file
-echo "🚀 Starting create_ap..."
-create_ap --dhcp-dnsmasq="$DHCP_CONFIG" "$WIFI_IFACE" "$INTERNET_IFACE" "$SSID" "$PASSWORD" --gateway "$GATEWAY_IP" --daemon
+# ✅ Start hostapd
+echo "🚀 Starting hostapd..."
+hostapd -B /etc/hostapd/hostapd.conf
+sleep 2
 
-# ✅ Check if create_ap is running
-if ! pgrep -f create_ap > /dev/null; then
-    echo "❌ Failed to start create_ap! Exiting..."
+# ✅ Verify hostapd is running without using pgrep
+if ! pidof hostapd > /dev/null; then
+    echo "❌ Failed to start hostapd! Exiting..."
     exit 1
 fi
 
-echo "🎉 WiFi AP is UP with SSID: $SSID (Interface: $WIFI_IFACE, Internet: $INTERNET_IFACE)"
+# ✅ Start dnsmasq (DHCP server)
+echo "🚀 Starting dnsmasq..."
+dnsmasq -C /etc/dnsmasq.conf -d &
+sleep 2
 
-# ✅ Keep container running
-while true; do sleep 1; done
+# ✅ Verify hostapd is running without using pgrep
+if ! pidof dnsmasq > /dev/null; then
+    echo "❌ Failed to start dnsmasq! Exiting..."
+    exit 1
+fi
+
+echo "🎉 WiFi AP is UP and running with IP: $GATEWAY_IP"
+
+# ✅ Keep container running & handle signals properly
+while true; do
+    sleep 1
+done
