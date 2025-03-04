@@ -1,22 +1,24 @@
 #!/bin/bash
 
-echo "🚀 Starting WiFi AP inside Docker container..."
+echo "🚀 Starting WiFi AP inside Docker container (Access Point Only)..."
 
-# ✅ Extract the Gateway IP from dnsmasq.conf
-GATEWAY_IP=$(grep -oP 'dhcp-option=3,\K[\d.]+' /etc/dnsmasq.conf)
+# ✅ Load settings from settings.conf
+SETTINGS_FILE="/etc/settings.conf"
 
-# ✅ If no IP is found, set a default value
-if [[ -z "$GATEWAY_IP" ]]; then
-    GATEWAY_IP="192.168.4.1"
-    echo "⚠️ No gateway IP found in dnsmasq.conf. Using default: $GATEWAY_IP"
+if [[ -f "$SETTINGS_FILE" ]]; then
+    source "$SETTINGS_FILE"
+    echo "✅ Loaded settings from $SETTINGS_FILE"
 else
-    echo "✅ Gateway IP detected from dnsmasq.conf: $GATEWAY_IP"
+    echo "⚠️ settings.conf not found! Using default gateway: 192.168.4.1"
+    GATEWAY_IP="192.168.4.1"
 fi
+
+echo "✅ Using static IP for wlan0: $GATEWAY_IP"
 
 # ✅ Cleanup function (runs on exit)
 cleanup() {
     echo "🛑 Cleaning up wlan0 before container stops..."
-    killall hostapd dnsmasq 2>/dev/null
+    killall hostapd 2>/dev/null
     sleep 2
     ip link set wlan0 down
     ip addr flush dev wlan0
@@ -32,7 +34,7 @@ echo "🔄 Resetting wlan0..."
 ip link set wlan0 down
 sleep 2
 
-# ✅ Set up wlan0 with the dynamic IP
+# ✅ Set up wlan0 with the static IP from settings.conf
 echo "✅ Enabling wlan0..."
 ip link set wlan0 up
 sleep 2
@@ -44,24 +46,13 @@ echo "🚀 Starting hostapd..."
 hostapd -B /etc/hostapd/hostapd.conf
 sleep 2
 
-# ✅ Verify hostapd is running without using pgrep
+# ✅ Verify hostapd is running
 if ! pidof hostapd > /dev/null; then
     echo "❌ Failed to start hostapd! Exiting..."
     exit 1
 fi
 
-# ✅ Start dnsmasq (DHCP server)
-echo "🚀 Starting dnsmasq..."
-dnsmasq -C /etc/dnsmasq.conf -d &
-sleep 2
-
-# ✅ Verify hostapd is running without using pgrep
-if ! pidof dnsmasq > /dev/null; then
-    echo "❌ Failed to start dnsmasq! Exiting..."
-    exit 1
-fi
-
-echo "🎉 WiFi AP is UP and running with IP: $GATEWAY_IP"
+echo "🎉 WiFi AP is UP and running with IP: $GATEWAY_IP (No DHCP)"
 
 # ✅ Keep container running & handle signals properly
 while true; do
